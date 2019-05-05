@@ -17,7 +17,6 @@ class TestModel(MingLeiModel):
             self.target_hidden_vars,
             params)
 
-    def
 
 
 target_hidden_vars = [0.85991353, 0.2477762]
