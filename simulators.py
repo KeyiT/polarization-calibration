@@ -2,12 +2,11 @@ from minglei_complete_model import MingLeiModel
 import hp816x_instr
 import time
 import Ke26XXA
-
-reload(Ke26XXA)
 from Ke26XXA import Ke26XXA
 import math
 import sympy as sym
 from sympy.utilities.lambdify import lambdify
+import numpy as np
 
 
 # from sympy.slovers import solve
@@ -26,9 +25,9 @@ class PhysicalModel(object):
 
     #        print('ok')
 
-    def observe(self, params):
+    def observe(self, inputs):
         # TODO: return p3 from your machine (in power unit)
-        self.__set_params(params)
+        self.__set_inputs(inputs)
         #        time.sleep(0.001)  ##unit: s
         p3 = self.hp_mainframe.readPWM(self.opt_slot, self.opt_obv_chn)
         p3_normalized = p3 / 39.81e-06
@@ -69,11 +68,11 @@ class PhysicalModel(object):
         currents = [self.keith_dev.getCurrent(self.keith_chn1), self.keith_dev.getCurrent(self.keith_chn2)]
         return currents
 
-    def __set_params(self, params):
+    def __set_inputs(self, inputs):
         alpha = 104.2
         beta = -0.07855
         #        R = 200
-        print(params)
+        print(inputs)
         #        a = []
         #        b = []
         #        eqn1 = a[0]*current1**4 + a[1]*current1**3 + a[2]*current1**2 - (params[0] - beta)/alpha
@@ -81,8 +80,8 @@ class PhysicalModel(object):
         #        slove(eqn1, current1, )
 
         inter_ = [
-            params[0] - beta,
-            params[1] - beta
+            inputs[0] - beta,
+            inputs[1] - beta
         ]
         inter_ = list(map(
             lambda xx: xx + 2 * np.pi if xx < 0 else xx,
@@ -137,21 +136,63 @@ class PhysicalModel(object):
         self.keith_dev.setCurrent(self.keith_chn2, roots[1][0])
         ##need a response time?
 
+
 class SimulatorModel(object):
 
-    def __init__(self):
+    def __init__(self, params):
 
         print("initializing...")
         # generate lambda function of latent model
         h1, h2 = sym.symbols('h1, h2', real=True)
         theta1, theta2 = sym.symbols('theta1, theta2', real=True)
-        self._latent_model = lambdify(
+        self._model = lambdify(
             (h1, h2, theta1, theta2),
-            sym.re(MingLeiModel._latent_model_sym(h1, h2, theta1, theta2)), modules='numpy')
+            sym.re(self._model_sym(h1, h2, theta1, theta2)),
+            modules='numpy'
+        )
+
+        self.params = params
 
         print("initialization done!")
 
-    def observe(self, params):
+    @classmethod
+    def _model_sym(cls, h1, h2, theta1, theta2):
+        """
+        Symbolic latent model
+        :param h1:
+        :param h2:
+        :param theta1:
+        :param theta2:
+        :return: symbolic model
+        """
+        beta = 2 * math.pi / 1.55e-9
+        L = 100e-6
+        k = math.sqrt(0.5)
+        t = math.sqrt(0.5)
+
+        M2 = sym.Matrix([[t, -k],
+                         [k, t]])
+        M4 = sym.Matrix([[t, -k],
+                         [k, t]])
+
+        e1 = sym.sqrt(h1) * sym.exp(-1j * h2)
+        e2 = sym.sqrt(1 - h1)
+        Ein = sym.Matrix([[e1], [e2]])
+        M10 = sym.Matrix([[sym.exp(-1j * beta * L - 1j * theta1), 0], [0, sym.exp(-1j * beta * L)]])
+        M30 = sym.Matrix([[sym.exp(-1j * beta * L - 1j * theta2), 0], [0, sym.exp(-1j * beta * L)]])
+
+        M50 = M4 * M30 * M2 * M10 * Ein
+        r30 = M50[0, 0]
+
+        p3 = sym.conjugate(r30) * r30
+
+        return p3
+
+    def observe(self, inputs):
+        h1, h2 = self.params
+        theta1, theta2 = inputs
+
+        return self._model(h1, h2, theta1, theta2)
 
 
 # instruction:
