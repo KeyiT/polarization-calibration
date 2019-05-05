@@ -8,13 +8,16 @@ import json
 
 class TestModel(MingLeiModel):
 
-    def __init__(self, init_hidden_vars, init_params):
+    def __init__(self, init_hidden_vars, init_params, target_hidden_vars):
+        self.target_hidden_vars = target_hidden_vars
         super(TestModel, self).__init__(init_hidden_vars, init_params)
 
     def observe(self, params):
         return self.latent_model(
-            target_hidden_vars,
+            self.target_hidden_vars,
             params)
+
+    def
 
 
 target_hidden_vars = [0.85991353, 0.2477762]
