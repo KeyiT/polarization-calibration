@@ -1,15 +1,78 @@
 import hp816x_instr
-import time
-import Ke26XXA
-from Ke26XXA import Ke26XXA
 import math
 import sympy as sym
 from sympy.utilities.lambdify import lambdify
 import numpy as np
 
 
-from sympy.slovers import solve
-from sympy import Symbol
+class SimulatorModel(object):
+
+    def __init__(self, params):
+
+        print("initializing...")
+        # generate lambda function of latent model
+        h1, h2 = sym.symbols('h1, h2', real=True)
+        theta1, theta2 = sym.symbols('theta1, theta2', real=True)
+        self._model = lambdify(
+            (h1, h2, theta1, theta2),
+            sym.re(self._model_sym(h1, h2, theta1, theta2)),
+            modules='numpy'
+        )
+
+        self.params = params
+        self.params_bounds = [[0, 0], [1.0, 2 * math.pi]]
+
+        print("initialization done!")
+
+    @classmethod
+    def _model_sym(cls, h1, h2, theta1, theta2):
+        """
+        Symbolic latent model
+        :param h1:
+        :param h2:
+        :param theta1:
+        :param theta2:
+        :return: symbolic model
+        """
+        beta = 2 * math.pi / 1.55e-9
+        L = 100e-6
+        k = math.sqrt(0.5)
+        t = math.sqrt(0.5)
+
+        M2 = sym.Matrix([[t, -k],
+                         [k, t]])
+        M4 = sym.Matrix([[t, -k],
+                         [k, t]])
+
+        e1 = sym.sqrt(h1) * sym.exp(-1j * h2)
+        e2 = sym.sqrt(1 - h1)
+        Ein = sym.Matrix([[e1], [e2]])
+        M10 = sym.Matrix([[sym.exp(-1j * beta * L - 1j * theta1), 0], [0, sym.exp(-1j * beta * L)]])
+        M30 = sym.Matrix([[sym.exp(-1j * beta * L - 1j * theta2), 0], [0, sym.exp(-1j * beta * L)]])
+
+        M50 = M4 * M30 * M2 * M10 * Ein
+        r30 = M50[0, 0]
+
+        p3 = sym.conjugate(r30) * r30
+
+        return p3
+
+    def observe(self, inputs):
+        h1, h2 = self.params
+        theta1, theta2 = inputs
+
+        return self._model(h1, h2, theta1, theta2)
+
+    def guess(self, inputs, params):
+        h1, h2 = params
+        theta1, theta2 = inputs
+
+        return self._model(h1, h2, theta1, theta2)
+
+    @staticmethod
+    def residual(pred_output, ground_output):
+        return math.fabs(pred_output - ground_output)
+
 
 class PhysicalModel(SimulatorModel):
     def __init__(self, opt_slot, opt_obv_chn, keith_dev, keith_chn1, keith_chn2,
@@ -134,75 +197,6 @@ class PhysicalModel(SimulatorModel):
         self.keith_dev.setCurrent(self.keith_chn1, roots[0][0])
         self.keith_dev.setCurrent(self.keith_chn2, roots[1][0])
         ##need a response time?
-
-
-class SimulatorModel(object):
-
-    def __init__(self, params):
-
-        print("initializing...")
-        # generate lambda function of latent model
-        h1, h2 = sym.symbols('h1, h2', real=True)
-        theta1, theta2 = sym.symbols('theta1, theta2', real=True)
-        self._model = lambdify(
-            (h1, h2, theta1, theta2),
-            sym.re(self._model_sym(h1, h2, theta1, theta2)),
-            modules='numpy'
-        )
-
-        self.params = params
-        self.params_bounds = [[0, 0], [1.0, 2 * math.pi]]
-
-        print("initialization done!")
-
-    @classmethod
-    def _model_sym(cls, h1, h2, theta1, theta2):
-        """
-        Symbolic latent model
-        :param h1:
-        :param h2:
-        :param theta1:
-        :param theta2:
-        :return: symbolic model
-        """
-        beta = 2 * math.pi / 1.55e-9
-        L = 100e-6
-        k = math.sqrt(0.5)
-        t = math.sqrt(0.5)
-
-        M2 = sym.Matrix([[t, -k],
-                         [k, t]])
-        M4 = sym.Matrix([[t, -k],
-                         [k, t]])
-
-        e1 = sym.sqrt(h1) * sym.exp(-1j * h2)
-        e2 = sym.sqrt(1 - h1)
-        Ein = sym.Matrix([[e1], [e2]])
-        M10 = sym.Matrix([[sym.exp(-1j * beta * L - 1j * theta1), 0], [0, sym.exp(-1j * beta * L)]])
-        M30 = sym.Matrix([[sym.exp(-1j * beta * L - 1j * theta2), 0], [0, sym.exp(-1j * beta * L)]])
-
-        M50 = M4 * M30 * M2 * M10 * Ein
-        r30 = M50[0, 0]
-
-        p3 = sym.conjugate(r30) * r30
-
-        return p3
-
-    def observe(self, inputs):
-        h1, h2 = self.params
-        theta1, theta2 = inputs
-
-        return self._model(h1, h2, theta1, theta2)
-
-    def guess(self, inputs, params):
-        h1, h2 = params
-        theta1, theta2 = inputs
-
-        return self._model(h1, h2, theta1, theta2)
-
-    @staticmethod
-    def residual(pred_output, ground_output):
-        return math.fabs(pred_output - ground_output)
 
 
 # instruction:

@@ -2,7 +2,7 @@ import calibrators
 import simulators
 import logging
 
-logging.basicConfig(filename='data/app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(filename='data/app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 
 def initialize_test():
     model = simulators.SimulatorModel([0.85991353, 0.2477762])
