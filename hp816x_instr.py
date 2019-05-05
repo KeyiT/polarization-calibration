@@ -21,10 +21,10 @@
 # THE SOFTWARE.
 
 from ctypes import *
-import numpy as np;
-import numpy.ctypeslib as npct;
-from itertools import repeat;
-import math;
+import numpy as np
+import numpy.ctypeslib as npct
+from itertools import repeat
+import math
 import string
 
 class hp816x(object):
