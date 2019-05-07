@@ -9,6 +9,8 @@ def initialize_test():
     calib = calibrators.SlidingWindownCalibrator(model, num_resamples=1)
     calib.initialize()
     print(calib.model_params)
+    print("model minimum: ")
+    print(model.observe(model.argmin()))
 
     histroy_decay = 0.7
 

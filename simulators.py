@@ -1,8 +1,11 @@
-import hp816x_instr
 import math
-import sympy as sym
-from sympy.utilities.lambdify import lambdify
+
 import numpy as np
+import sympy as sym
+from scipy.optimize import minimize
+from sympy.utilities.lambdify import lambdify
+
+import hp816x_instr
 
 
 class SimulatorModel(object):
@@ -19,13 +22,29 @@ class SimulatorModel(object):
             modules='numpy'
         )
 
+        # generate lambda function of jacobin of model with respect to hidden variables
+        h1, h2 = sym.symbols('h1, h2', real=True)
+        theta1, theta2 = sym.symbols('theta1, theta2', real=True)
+        jac_params_sym_ = self._model_jac_params_sym(self, h1, h2, theta1, theta2)
+        self._jac_params = lambdify(
+            (h1, h2, theta1, theta2),
+            jac_params_sym_, modules='numpy')
+
+        # generate lambda function of jacobin of model with respect to parameters
+        h1, h2 = sym.symbols('h1, h2', real=True)
+        theta1, theta2 = sym.symbols('theta1, theta2', real=True)
+        jac_inputs_sym_ = self._model_jac_inputs_sym(self, h1, h2, theta1, theta2)
+        self._jac_inputs = lambdify(
+            (h1, h2, theta1, theta2),
+            jac_inputs_sym_, modules='numpy')
+
         self.params = params
         self.params_bounds = [[0, 0], [1.0, 2 * math.pi]]
 
         print("initialization done!")
 
-    @classmethod
-    def _model_sym(cls, h1, h2, theta1, theta2):
+    @staticmethod
+    def _model_sym(h1, h2, theta1, theta2):
         """
         Symbolic latent model
         :param h1:
@@ -57,6 +76,42 @@ class SimulatorModel(object):
 
         return p3
 
+    @staticmethod
+    def _model_jac_params_sym(self, h1, h2, theta1, theta2):
+        """
+        Symbolic model jacobin with respect to model parameters
+        :param h1:
+        :param h2:
+        :param theta1:
+        :param theta2:
+        :return:
+        """
+
+        p3 = self._model_sym(h1, h2, theta1, theta2)
+
+        dydh1 = sym.re(sym.diff(p3, h1))
+        dydh2 = sym.re(sym.diff(p3, h2))
+
+        return sym.Matrix([dydh1, dydh2]).transpose()
+
+    @staticmethod
+    def _model_jac_inputs_sym(self, h1, h2, theta1, theta2):
+        """
+        Symbolic model Jacobin with respect to model parameters
+        :param h1:
+        :param h2:
+        :param theta1:
+        :param theta2:
+        :return:
+        """
+
+        p3 = self._model_sym(h1, h2, theta1, theta2)
+
+        dydh1 = sym.re(sym.diff(p3, theta1))
+        dydh2 = sym.re(sym.diff(p3, theta2))
+
+        return sym.Matrix([dydh1, dydh2]).transpose()
+
     def observe(self, inputs):
         h1, h2 = self.params
         theta1, theta2 = inputs
@@ -68,6 +123,62 @@ class SimulatorModel(object):
         theta1, theta2 = inputs
 
         return self._model(h1, h2, theta1, theta2)
+
+    def guess_jac_inputs(self, inputs, params):
+        h1, h2 = params
+        theta1, theta2 = inputs
+
+        h1 = min(h1, 1.0)
+
+        jac_tmp = self._jac_inputs(h1, h2, theta1, theta2)
+        return np.ndarray(shape=[2], buffer=np.array([jac_tmp[0][0], jac_tmp[0][1]]))
+
+
+    def argmin(self, initial_inputs=None):
+
+        if initial_inputs is None:
+            initial_inputs = [
+                [np.pi, np.pi],
+                [0.1 * np.pi, np.pi * 0.1],
+                [0.1 * np.pi, np.pi * 1.8],
+                [1.8 * np.pi, np.pi * 1.8],
+                [1.8 * np.pi, np.pi * 0.1]
+            ]
+
+        else:
+            initial_inputs = [initial_inputs, ]
+
+        for ini in initial_inputs:
+            results = minimize(
+                lambda input_: self.guess(input_, self.params),
+                np.ndarray(shape=[2], buffer=np.array(ini)),
+                method='Newton-CG', jac=lambda input_: self.guess_jac_inputs(input_, self.params), tol=1E-16
+            )
+
+            if results.success and results.fun < 1E-5:
+                print("minimum is " + str(results.fun))
+                ps = list(map(
+                    self.input2domain, results.x
+                ))
+
+                if ps[0] > math.pi:
+                    ps[0] -= math.pi
+                    ps[1] = 2 * math.pi - ps[1]
+
+                return ps
+
+    @staticmethod
+    def input2domain(num):
+            if num > np.pi * 2:
+                num = num % (np.pi * 2)
+
+            if num < 0:
+                num = np.ceil(np.abs(num) // (np.pi * 2)) * np.pi * 2 + num
+
+            if num > np.pi:
+                num = 2 * np.pi - num
+
+            return num
 
     @staticmethod
     def residual(pred_output, ground_output):
