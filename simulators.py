@@ -43,6 +43,70 @@ class SimulatorModel(object):
 
         print("initialization done!")
 
+    def observe(self, inputs):
+        h1, h2 = self.params
+        theta1, theta2 = inputs
+
+        return self._model(h1, h2, theta1, theta2)
+
+    def guess(self, inputs, params):
+        h1, h2 = params
+        theta1, theta2 = inputs
+
+        return self._model(h1, h2, theta1, theta2)
+
+    def guess_jac_inputs(self, inputs, params):
+        h1, h2 = params
+        theta1, theta2 = inputs
+
+        h1 = min(h1, 0.99)
+
+        jac_tmp = self._jac_inputs(h1, h2, theta1, theta2)
+        return np.ndarray(shape=[2], buffer=np.array([jac_tmp[0][0], jac_tmp[0][1]]))
+
+    def guess_jac_params(self, inputs, params):
+        h1, h2 = params
+        theta1, theta2 = inputs
+
+        h1 = min(h1, 0.99)
+        return self._jac_params(h1, h2, theta1, theta2)
+
+    def argmin(self, params=None, initial_inputs=None):
+
+        if initial_inputs is None:
+            initial_inputs = [
+                [np.pi, np.pi],
+                [0.1 * np.pi, np.pi * 0.1],
+                [0.1 * np.pi, np.pi * 1.8],
+                [1.8 * np.pi, np.pi * 1.8],
+                [1.8 * np.pi, np.pi * 0.1]
+            ]
+
+        else:
+            initial_inputs = [initial_inputs, ]
+
+        for ini in initial_inputs:
+            results = minimize(
+                lambda input_: self.guess(input_, self.params if params is None else params),
+                np.ndarray(shape=[2], buffer=np.array(ini)),
+                method='Newton-CG', jac=lambda input_: self.guess_jac_inputs(input_, self.params if params is None else params), tol=1E-15
+            )
+
+            if results.success:
+                # print("minimum is " + str(results.fun))
+                ps = results.x.tolist()
+                # ps = list(map(
+                #     self.input2domain, results.x
+                # ))
+                #
+                # if ps[0] > math.pi:
+                #     ps[0] -= math.pi
+                #     ps[1] = 2 * math.pi - ps[1]
+
+                return ps
+
+            raise ValueError("failed to find minimum")
+
     @staticmethod
     def _model_sym(h1, h2, theta1, theta2):
         """
@@ -112,73 +176,13 @@ class SimulatorModel(object):
 
         return sym.Matrix([dydh1, dydh2]).transpose()
 
-    def observe(self, inputs):
-        h1, h2 = self.params
-        theta1, theta2 = inputs
-
-        return self._model(h1, h2, theta1, theta2)
-
-    def guess(self, inputs, params):
-        h1, h2 = params
-        theta1, theta2 = inputs
-
-        return self._model(h1, h2, theta1, theta2)
-
-    def guess_jac_inputs(self, inputs, params):
-        h1, h2 = params
-        theta1, theta2 = inputs
-
-        h1 = min(h1, 1.0)
-
-        jac_tmp = self._jac_inputs(h1, h2, theta1, theta2)
-        return np.ndarray(shape=[2], buffer=np.array([jac_tmp[0][0], jac_tmp[0][1]]))
-
-
-    def argmin(self, initial_inputs=None):
-
-        if initial_inputs is None:
-            initial_inputs = [
-                [np.pi, np.pi],
-                [0.1 * np.pi, np.pi * 0.1],
-                [0.1 * np.pi, np.pi * 1.8],
-                [1.8 * np.pi, np.pi * 1.8],
-                [1.8 * np.pi, np.pi * 0.1]
-            ]
-
-        else:
-            initial_inputs = [initial_inputs, ]
-
-        for ini in initial_inputs:
-            results = minimize(
-                lambda input_: self.guess(input_, self.params),
-                np.ndarray(shape=[2], buffer=np.array(ini)),
-                method='Newton-CG', jac=lambda input_: self.guess_jac_inputs(input_, self.params), tol=1E-16
-            )
-
-            if results.success and results.fun < 1E-5:
-                print("minimum is " + str(results.fun))
-                ps = list(map(
-                    self.input2domain, results.x
-                ))
-
-                if ps[0] > math.pi:
-                    ps[0] -= math.pi
-                    ps[1] = 2 * math.pi - ps[1]
-
-                return ps
-
     @staticmethod
-    def input2domain(num):
-            if num > np.pi * 2:
-                num = num % (np.pi * 2)
-
-            if num < 0:
-                num = np.ceil(np.abs(num) // (np.pi * 2)) * np.pi * 2 + num
-
-            if num > np.pi:
-                num = 2 * np.pi - num
-
-            return num
+    def input2domain(theta):
+        while theta > 2 * np.pi:
+            theta -= 2 * np.pi
+        while theta < 0:
+            theta += 2 * np.pi
+        return theta
 
     @staticmethod
     def residual(pred_output, ground_output):

@@ -10,32 +10,10 @@ def initialize_test():
     calib.initialize()
     print(calib.model_params)
     print("model minimum: ")
-    print(model.observe(model.argmin()))
+    print(model.observe(model.argmin(calib.model_params)))
 
-    histroy_decay = 0.7
-
-    model.params = [0.85991353 + 1E-3, 0.2477762 + 1E-3]
-    pred_params = calib.calibrate(history_decay=histroy_decay)
-    print(pred_params)
-
-    model.params = [0.85991353 + 1E-3, 0.2477762 + 1E-3]
-    pred_params = calib.calibrate(history_decay=histroy_decay)
-    print(pred_params)
-
-    model.params = [0.85991353 + 1E-3, 0.2477762 + 1E-3]
-    pred_params = calib.calibrate(history_decay=histroy_decay)
-    print(pred_params)
-
-    model.params = [0.85991353 + 1E-3, 0.2477762 + 1E-3]
-    pred_params = calib.calibrate(history_decay=histroy_decay)
-    print(pred_params)
-
-    model.params = [0.85991353 + 1E-3, 0.2477762 + 1E-3]
-    pred_params = calib.calibrate(history_decay=histroy_decay)
-    print(pred_params)
-
-    model.params = [0.85991353 + 1E-3, 0.2477762 + 1E-3]
-    pred_params = calib.calibrate(history_decay=histroy_decay)
-    print(pred_params)
+    model.params = [0.85991353 + 5E-2, 0.2477762 + 5E-1]
+    calib.track()
+    print(calib.sample_queue[-1])
 
 initialize_test()

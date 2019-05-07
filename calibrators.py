@@ -4,7 +4,8 @@ import random
 import collections
 
 import numpy as np
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares, newton_krylov, broyden1
+
 
 
 class SlidingWindownCalibrator(object):
@@ -57,9 +58,15 @@ class SlidingWindownCalibrator(object):
             results = least_squares(
                 loss_func_, ini, verbose=1, method='trf', bounds=self.model.params_bounds, ftol=3e-16, xtol=3e-16, gtol=3e-16
             )
-            if results.success and np.sum(np.array(results.fun)) < 1E-7:
+            if results.success:
                 self.model_params = results.x
                 log.info("initial model parameter: " + str(self.model_params))
+
+                min_inputs = self.model.argmin(params=self.model_params)
+                min_ = self.model.observe(min_inputs)
+
+                self.sample_queue.popleft()
+                self.sample_queue.append(SampleRecord(min_inputs, min_))
                 return
 
         log.info("model parameters not found!")
@@ -104,45 +111,39 @@ class SlidingWindownCalibrator(object):
         if results.success:
             return results.x
 
-    def track(self, seed=3, history_decay=0.9):
+    def track(self):
         if self.sample_queue is None or self.model_params is None:
             raise ValueError("calibrator not initialized!")
 
-        random.seed(seed)
-        for record_ in self.sample_queue:
-            record_.decay(history_decay)
+        new_output = self.model.observe(self.sample_queue[-1].inputs)
 
-        for _ in range(self.num_resamples):
-            # remove samples expired
-            self.sample_queue.popleft()
+        def change_residule(change):
+            jac_params = np.squeeze(self.model.guess_jac_params(
+                self.sample_queue[-1].inputs, (np.asarray(change) + np.asarray(self.model_params)).tolist()
+            ))
 
-            # resample
-            inputs_ = [
-                random.uniform(0, math.pi),
-                random.uniform(0, math.pi)
-            ]
-            output_ = self.model.observe(inputs_)
-            self.sample_queue.append(SampleRecord(inputs_, output_))
+            residual_ = new_output - np.squeeze(np.dot(np.asarray(change), jac_params))
+            return residual_
 
-        def loss_func_(model_params):
-            loss = []
-            for i in range(self.num_samples):
-                pred = self.model.guess(self.sample_queue[i].inputs, model_params)
-                loss.append(self.model.residual(pred, self.sample_queue[i].output) * self.sample_queue[i].decay_)
-            return loss
-
+        #best_change = broyden1(change_residule, [0, 0], f_tol=1e-6, verbose=1)
+        params_bounds = [
+            [self.model.params_bounds[0][0]-self.model_params[0], self.model.params_bounds[0][1]-self.model_params[1]],
+            [self.model.params_bounds[1][0] - self.model_params[0], self.model.params_bounds[1][1] - self.model_params[1]]
+        ]
         results = least_squares(
-            loss_func_, self.model_params, verbose=1, method='trf', bounds=self.model.params_bounds, ftol=3e-16, xtol=3e-18,
+            change_residule, [0, 0], verbose=1, method='trf', bounds=params_bounds, ftol=3e-16,
+            xtol=3e-15,
             gtol=3e-16
         )
-        if results.success and np.sum(np.array(results.fun)) < 1E-7:
-            self.model_params = results.x
-            log.info("model parameter: " + str(self.model_params))
-            return self.model_params
 
-        log.info("model parameters not found!")
-        if results.success:
-            return results.x
+        self.model_params = (results.x + np.asarray(self.model_params)).tolist()
+        print results
+
+        min_inputs = self.model.argmin(self.model_params)
+        min_ = self.model.observe(min_inputs)
+
+        self.sample_queue.popleft()
+        self.sample_queue.append(SampleRecord(min_inputs, min_))
 
 
 class SampleRecord(object):
