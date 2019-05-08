@@ -94,14 +94,14 @@ class SimulatorModel(object):
 
             if results.success:
                 # print("minimum is " + str(results.fun))
-                ps = results.x.tolist()
-                # ps = list(map(
-                #     self.input2domain, results.x
-                # ))
-                #
-                # if ps[0] > math.pi:
-                #     ps[0] -= math.pi
-                #     ps[1] = 2 * math.pi - ps[1]
+                # ps = results.x.tolist()
+                ps = list(map(
+                    self.input2domain, results.x
+                ))
+
+                if ps[0] > math.pi:
+                    ps[0] -= math.pi
+                    ps[1] = 2 * math.pi - ps[1]
 
                 return ps
 

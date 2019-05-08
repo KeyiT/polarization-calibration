@@ -9,11 +9,16 @@ def initialize_test():
     calib = calibrators.SlidingWindownCalibrator(model, num_resamples=1)
     calib.initialize()
     print(calib.model_params)
-    print("model minimum: ")
-    print(model.observe(model.argmin(calib.model_params)))
+    print(calib.sample_queue[-1].inputs)
+    print(calib.sample_queue[-1].output)
 
-    model.params = [0.85991353 + 5E-2, 0.2477762 + 5E-1]
+    print("")
+    model.params = [0.85991353 + 5E-3, 0.2477762 + 5E-2]
     calib.track()
-    print(calib.sample_queue[-1])
+    print(model.params)
+    print(calib.model_params)
+    print(calib.sample_queue[-1].inputs)
+    print(model.observe(calib.sample_queue[-2].inputs))
+    print(calib.sample_queue[-1].output)
 
 initialize_test()

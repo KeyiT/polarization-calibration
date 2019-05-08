@@ -122,8 +122,8 @@ class SlidingWindownCalibrator(object):
                 self.sample_queue[-1].inputs, (np.asarray(change) + np.asarray(self.model_params)).tolist()
             ))
 
-            residual_ = new_output - np.squeeze(np.dot(np.asarray(change), jac_params))
-            return residual_
+            residual_ = np.asarray([new_output, new_output]) - np.asarray([jac_params[0] * change[0], jac_params[1] * change[1]])
+            return residual_ * 1E15
 
         #best_change = broyden1(change_residule, [0, 0], f_tol=1e-6, verbose=1)
         params_bounds = [
@@ -131,15 +131,15 @@ class SlidingWindownCalibrator(object):
             [self.model.params_bounds[1][0] - self.model_params[0], self.model.params_bounds[1][1] - self.model_params[1]]
         ]
         results = least_squares(
-            change_residule, [0, 0], verbose=1, method='trf', bounds=params_bounds, ftol=3e-16,
+            change_residule, [1E-3, 1E-3], verbose=1, method='trf', bounds=params_bounds, ftol=3e-16,
             xtol=3e-15,
             gtol=3e-16
         )
 
         self.model_params = (results.x + np.asarray(self.model_params)).tolist()
-        print results
+        log.debug(results)
 
-        min_inputs = self.model.argmin(self.model_params)
+        min_inputs = self.model.argmin(params=self.model_params, initial_inputs=self.sample_queue[-1].inputs)
         min_ = self.model.observe(min_inputs)
 
         self.sample_queue.popleft()
