@@ -56,7 +56,7 @@ class SlidingWindownCalibrator(object):
         log.info("searching initial model parameters...")
         for ini in init_guess:
             results = least_squares(
-                loss_func_, ini, verbose=1, method='trf', bounds=self.model.params_bounds, ftol=3e-16, xtol=3e-16, gtol=3e-16
+                loss_func_, ini, verbose=1, method='trf', bounds=self.model.params_bounds, ftol=3e-16, xtol=1e-16, gtol=3e-16
             )
             if results.success:
                 self.model_params = results.x
@@ -132,7 +132,7 @@ class SlidingWindownCalibrator(object):
         ]
         results = least_squares(
             change_residule, [1E-3, 1E-3], verbose=1, method='trf', bounds=params_bounds, ftol=3e-16,
-            xtol=3e-15,
+            xtol=3e-16,
             gtol=3e-16
         )
 
