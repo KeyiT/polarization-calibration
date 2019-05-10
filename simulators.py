@@ -105,7 +105,7 @@ class SimulatorModel(object):
 
                 return ps
 
-            raise ValueError("failed to find minimum")
+        raise ValueError("failed to find minimum")
 
     @staticmethod
     def _model_sym(h1, h2, theta1, theta2):
