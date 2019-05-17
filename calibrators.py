@@ -130,6 +130,7 @@ class SlidingWindownCalibrator(object):
             [self.model.params_bounds[0][0]-self.model_params[0], self.model.params_bounds[0][1]-self.model_params[1]],
             [self.model.params_bounds[1][0] - self.model_params[0], self.model.params_bounds[1][1] - self.model_params[1]]
         ]
+        print('tracking...')
         results = least_squares(
             change_residule, [1E-3, 1E-3], verbose=1, method='trf', bounds=params_bounds, ftol=3e-16,
             xtol=3e-16,
@@ -139,6 +140,7 @@ class SlidingWindownCalibrator(object):
         self.model_params = (results.x + np.asarray(self.model_params)).tolist()
         log.debug(results)
 
+        print('searching minimum...')
         min_inputs = self.model.argmin(params=self.model_params, initial_inputs=self.sample_queue[-1].inputs)
         min_ = self.model.observe(min_inputs)
 
