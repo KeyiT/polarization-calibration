@@ -41,13 +41,29 @@ class SimulatorModel(object):
         self.params = params
         self.params_bounds = [[0, 0], [1.0, 2 * math.pi]]
 
-        # generate lambda function of Hessian of model with respect to parameters
+        # generate lambda function of Hessian of model with respect to inputs
         h1, h2 = sym.symbols('h1, h2', real=True)
         theta1, theta2 = sym.symbols('theta1, theta2', real=True)
         hes_inputs_sym_ = self._model_hes_inputs_sym(self, h1, h2, theta1, theta2)
         self._hes_inputs = lambdify(
             (h1, h2, theta1, theta2),
             hes_inputs_sym_, modules='numpy')
+
+        # generate lambda function of Hessian of model with respect to parameters
+        h1, h2 = sym.symbols('h1, h2', real=True)
+        theta1, theta2 = sym.symbols('theta1, theta2', real=True)
+        hes_params_sym_ = self._model_hes_params_sym(self, h1, h2, theta1, theta2)
+        self._hes_params = lambdify(
+            (h1, h2, theta1, theta2),
+            hes_params_sym_, modules='numpy')
+
+        # generate lambda function of Hessian of model with respect to parameters
+        h1, h2 = sym.symbols('h1, h2', real=True)
+        theta1, theta2 = sym.symbols('theta1, theta2', real=True)
+        hes_inputs_params_sym_ = self._model_hes_inputs_params_sym(self, h1, h2, theta1, theta2)
+        self._hes_inputs_params = lambdify(
+            (h1, h2, theta1, theta2),
+            hes_inputs_params_sym_, modules='numpy')
 
         print("initialization done!")
 
@@ -86,7 +102,21 @@ class SimulatorModel(object):
         h1 = min(h1, 1.0)
         return self._hes_inputs(h1, h2, theta1, theta2)
 
-    def argmin(self, params=None, initial_inputs=None):
+    def guess_hes_params(self, inputs, params):
+        h1, h2 = params
+        theta1, theta2 = inputs
+
+        h1 = min(h1, 1.0)
+        return self._hes_params(h1, h2, theta1, theta2)
+
+    def guess_hes_inputs_params(self, inputs, params):
+        h1, h2 = params
+        theta1, theta2 = inputs
+
+        h1 = min(h1, 1.0)
+        return self._hes_inputs_params(h1, h2, theta1, theta2)
+
+    def argmin(self, params=None, initial_inputs=None, verbose=0):
 
         if initial_inputs is None:
             initial_inputs = [
@@ -107,7 +137,7 @@ class SimulatorModel(object):
                 method='Newton-CG', tol=1E-15,
                 jac=lambda input_: self.guess_jac_inputs(input_, self.params if params is None else params),
                 hess=lambda input_: self.guess_hes_inputs(input_, self.params if params is None else params),
-                options={'gtol': 1e-6, 'disp': True, 'xtol': 1e-15}
+                options={'gtol': 1e-6, 'disp': verbose > 0, 'xtol': 1e-15}
             )
 
             if results.success:
@@ -214,6 +244,52 @@ class SimulatorModel(object):
         dydh1h2 = sym.re(sym.diff(dydh1, theta2))
         dydh2h1 = sym.re(sym.diff(dydh2, theta1))
         dydh2h2 = sym.re(sym.diff(dydh2, theta2))
+
+        return sym.Matrix([[dydh1h1, dydh1h2], [dydh2h1, dydh2h2]])
+
+    @staticmethod
+    def _model_hes_params_sym(self, h1, h2, theta1, theta2):
+        """
+        Symbolic model jacobin with respect to hidden variables
+        :param h1:
+        :param h2:
+        :param theta1:
+        :param theta2:
+        :return:
+        """
+
+        p3 = self._model_sym(h1, h2, theta1, theta2)
+
+        dydh1 = sym.re(sym.diff(p3, h1))
+        dydh2 = sym.re(sym.diff(p3, h2))
+
+        dydh1h1 = sym.re(sym.diff(dydh1, h1))
+        dydh1h2 = sym.re(sym.diff(dydh1, h2))
+        dydh2h1 = sym.re(sym.diff(dydh2, h1))
+        dydh2h2 = sym.re(sym.diff(dydh2, h2))
+
+        return sym.Matrix([[dydh1h1, dydh1h2], [dydh2h1, dydh2h2]])
+
+    @staticmethod
+    def _model_hes_inputs_params_sym(self, h1, h2, theta1, theta2):
+        """
+        Symbolic model jacobin with respect to inputs and model parameters
+        :param h1:
+        :param h2:
+        :param theta1:
+        :param theta2:
+        :return:
+        """
+
+        p3 = self._model_sym(h1, h2, theta1, theta2)
+
+        dydh1 = sym.diff(p3, theta1)
+        dydh2 = sym.diff(p3, theta2)
+
+        dydh1h1 = sym.re(sym.diff(dydh1, h1))
+        dydh1h2 = sym.re(sym.diff(dydh1, h2))
+        dydh2h1 = sym.re(sym.diff(dydh2, h1))
+        dydh2h2 = sym.re(sym.diff(dydh2, h2))
 
         return sym.Matrix([[dydh1h1, dydh1h2], [dydh2h1, dydh2h2]])
 
