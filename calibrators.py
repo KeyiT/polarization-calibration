@@ -111,17 +111,34 @@ class SlidingWindownCalibrator(object):
         if results.success:
             return results.x
 
-    def track(self, verbose=0):
+    def track(self, epsilon=None, num_observes=1, verbose=0):
         if self.sample_queue is None or self.model_params is None:
             raise ValueError("calibrator not initialized!")
 
-        new_output = self.model.observe(self.sample_queue[-1].inputs)
+        if not isinstance(num_observes, int) or num_observes < 1:
+            raise ValueError("number of observes must be a integer greater than 1!")
 
-        epsilon = np.sqrt(np.finfo(float).eps)
+        # estimate output
+        new_output = 0
+        for _ in range(num_observes):
+            new_output += self.model.observe(self.sample_queue[-1].inputs)
+        new_output /= num_observes
+
+        epsilon = np.sqrt(np.finfo(float).eps) if epsilon is None else epsilon
+
         log.debug("epsilon: " + str(epsilon))
-        numerical_output_changes = self._approx_fprime_epsilon(
-            self.sample_queue[-1].inputs, self.model.observe, [epsilon, epsilon]
-        )
+        # estimate f prime times epsilon
+        numerical_output_changes = None
+        for _ in range(num_observes):
+            if numerical_output_changes is None:
+                numerical_output_changes = self._approx_fprime_epsilon(
+                    self.sample_queue[-1].inputs, self.model.observe, [epsilon, epsilon]
+                )
+            else:
+                numerical_output_changes += self._approx_fprime_epsilon(
+                    self.sample_queue[-1].inputs, self.model.observe, [epsilon, epsilon]
+                )
+        numerical_output_changes /= num_observes
 
         def residual(new_params):
             log.debug("tried parameters: " + str(new_params))
@@ -129,46 +146,21 @@ class SlidingWindownCalibrator(object):
                 self.sample_queue[-1].inputs, new_params
             ))
 
-            output_residual = new_output - self.model.guess(self.sample_queue[-1].inputs, new_params)
             jac_residual = numerical_output_changes - jac_inputs * epsilon
 
-            # return np.asarray(jac_residual.tolist() + [output_residual,])
             return jac_residual
 
         def residual_jac(new_params):
-
-            jac_params = self.model.guess_jac_params(
-                self.sample_queue[-1].inputs, new_params
-            )
 
             hes_params = self.model.guess_hes_inputs_params(
                 self.sample_queue[-1].inputs, new_params
             )
 
-            return -np.concatenate((hes_params * epsilon, jac_params), axis=0) * 1E8
-
-        # TODO: remove
-        print('target residual: ' + str(residual(self.model.params).tolist()))
-
-        # test_params = [0.5, 0.5]
-        # print('target residual jac:' + str(residual_jac(test_params).tolist()))
-        # print('check residual jac: ' + str(
-        #     check_grad(lambda params_: residual(params_)[0], lambda params_: residual_jac(params_)[0, :],
-        #                test_params, epsilon=epsilon)))
-        # print('check residual jac: ' + str(
-        #     check_grad(lambda params_: residual(params_)[1], lambda params_: residual_jac(params_)[1, :],
-        #                test_params, epsilon=epsilon)))
-        # print('check residual jac: ' + str(
-        #     check_grad(lambda params_: residual(params_)[2], lambda params_: residual_jac(params_)[2, :],
-        #                test_params, epsilon=epsilon)))
+            return - hes_params * epsilon
 
         if verbose > 0:
             print('tracking...')
-        # results = least_squares(
-        #     residual, self.model_params, verbose=verbose, method='trf', bounds=self.model.params_bounds,
-        #     ftol=3e-16, xtol=3e-16, gtol=3e-16
-        # )
-        results = fsolve(residual, np.asarray(self.model_params), xtol=3e-16)
+        results = fsolve(residual, np.asarray(self.model_params), fprime=residual_jac, xtol=3e-16)
 
         next_model_params = results.tolist()
         log.debug(results)
@@ -197,73 +189,6 @@ class SlidingWindownCalibrator(object):
             grad[k] = f(*((xk + d,) + args)) - f0
             ei[k] = 0.0
         return grad
-
-    # def track(self, verbose=0):
-    #     if self.sample_queue is None or self.model_params is None:
-    #         raise ValueError("calibrator not initialized!")
-    #
-    #     new_output = self.model.observe(self.sample_queue[-1].inputs)
-    #
-    #     def change_residule(new_params):
-    #         jac_params = np.squeeze(self.model.guess_jac_params(
-    #             self.sample_queue[-1].inputs, new_params
-    #         ))
-    #
-    #         change = (np.asarray(new_params) - np.asarray(self.model_params)).tolist()
-    #
-    #         residual_ = np.asarray([new_output, new_output]) - \
-    #                     np.asarray([
-    #                         jac_params[0] * change[0] / 2.0,
-    #                         jac_params[1] * change[1] / 2.0
-    #                     ])
-    #
-    #         print("new parameters " + str(new_params))
-    #         print("residule" + str(residual_))
-    #         return residual_
-    #
-    #     def change_residule_jac(new_params):
-    #         jac_params = np.squeeze(self.model.guess_jac_params(
-    #             self.sample_queue[-1].inputs, new_params
-    #         ))
-    #
-    #         hes_params = self.model.guess_hes_params(
-    #             self.sample_queue[-1].inputs, new_params
-    #         )
-    #
-    #         change = np.asarray(new_params) - np.asarray(self.model_params)
-    #
-    #         h00 = - change[0] * hes_params[0, 0] - jac_params[0]
-    #         h01 = - change[0] * hes_params[0, 1]
-    #         h10 = - change[1] * hes_params[1, 0]
-    #         h11 = - change[1] * hes_params[1, 1] - jac_params[1]
-    #
-    #         return np.asarray([[h00, h01], [h10, h11]]) / 2.0
-    #
-    #     # TODO: remove
-    #     print('target residual: ' + str(change_residule(self.model.params).tolist()))
-    #
-    #     if verbose > 0:
-    #         print('tracking...')
-    #     results = least_squares(
-    #         change_residule, self.model_params, verbose=verbose, method='trf', bounds=self.model.params_bounds,
-    #         jac=change_residule_jac,
-    #         ftol=3e-16, xtol=3e-16, gtol=3e-16
-    #     )
-    #
-    #     next_model_params = results.x.tolist()
-    #     log.debug(results)
-    #
-    #     if verbose > 0:
-    #         print('searching minimum...')
-    #     min_inputs = self.model.argmin(params=next_model_params, initial_inputs=self.sample_queue[-1].inputs, verbose=verbose)
-    #     min_ = self.model.observe(min_inputs)
-    #
-    #     log.info("minimum of proposed model: " + str(min_))
-    #
-    #     if min_ < new_output:
-    #         self.model_params = next_model_params
-    #         self.sample_queue.popleft()
-    #         self.sample_queue.append(SampleRecord(min_inputs, min_))
 
 
 class SampleRecord(object):
