@@ -116,7 +116,7 @@ class SlidingWindownCalibrator(object):
             raise ValueError("calibrator not initialized!")
 
         if not isinstance(num_observes, int) or num_observes < 1:
-            raise ValueError("number of observes must be a integer greater than 1!")
+            raise ValueError("number of observes must be a integer greater than or equal to 1!")
 
         # estimate output
         new_output = 0
