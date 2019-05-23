@@ -315,16 +315,24 @@ class PointLSCalibrator(object):
 
         # observe other points
         y1 = 0
-        x1 = np.asarray(self.sample_queue[-1].inputs) + np.asarray([epsilon, epsilon])
+        x1 = np.asarray(self.sample_queue[-1].inputs) + np.asarray([0, epsilon])
         for _ in range(num_observes):
             y1 += self.model.observe(x1.tolist())
+        y1 /= num_observes
+
+        y2 = 0
+        x2 = np.asarray(self.sample_queue[-1].inputs) + np.asarray([epsilon, 0])
+        for _ in range(num_observes):
+            y2 += self.model.observe(x2.tolist())
+        y2 /= num_observes
 
         def residual(new_params):
 
             y0_model = self.model.guess(self.sample_queue[-1].inputs, new_params)
             y1_model = self.model.guess(x1.tolist(), new_params)
+            y2_model = self.model.guess(x2.tolist(), new_params)
 
-            return np.vstack((new_output, y1)) - np.asarray([y0_model, y1_model])
+            return np.asarray([new_output, y1, y2]) - np.asarray([y0_model, y1_model, y2_model])
 
         def residual_jac(new_params):
 
@@ -335,9 +343,9 @@ class PointLSCalibrator(object):
 
         if verbose > 0:
             print('tracking...')
-        results = fsolve(residual, np.asarray(self.model_params), fprime=residual_jac, xtol=3e-16)
+        results = least_squares(residual, self.model_params, ftol=1e-16, xtol=1e-16, gtol=1e-16)
 
-        next_model_params = results.tolist()
+        next_model_params = results.x.tolist()
         log.debug(results)
 
         if verbose > 0:
