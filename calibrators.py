@@ -110,7 +110,7 @@ class SlidingWindownCalibrator(object):
         if results.success:
             return results.x
 
-    def track(self, epsilon=None, num_observes=1, verbose=0):
+    def track(self, epsilon=None, threshold=1E-6, num_observes=1, verbose=0):
         if self.sample_queue is None or self.model_params is None:
             raise ValueError("calibrator not initialized!")
 
@@ -122,6 +122,8 @@ class SlidingWindownCalibrator(object):
         for _ in range(num_observes):
             new_output += self.model.observe(self.sample_queue[-1].inputs)
         new_output /= num_observes
+        if np.abs(new_output - self.model.guess(self.sample_queue[-1].inputs, self.model_params)) < threshold:
+            return
 
         epsilon = np.sqrt(np.finfo(float).eps) if epsilon is None else epsilon
 
@@ -293,7 +295,7 @@ class PointLSCalibrator(object):
         if results.success:
             return results.x
 
-    def track(self, epsilon=None, num_observes=1, verbose=0):
+    def track(self, epsilon=None, threshold=1E-6, num_observes=1, verbose=0):
         if self.sample_queue is None or self.model_params is None:
             raise ValueError("calibrator not initialized!")
 
@@ -305,6 +307,8 @@ class PointLSCalibrator(object):
         for _ in range(num_observes):
             new_output += self.model.observe(self.sample_queue[-1].inputs)
         new_output /= num_observes
+        if np.abs(new_output - self.model.guess(self.sample_queue[-1].inputs, self.model_params)) < threshold:
+            return
 
         epsilon = np.sqrt(np.finfo(float).eps) if epsilon is None else epsilon
         log.debug("epsilon: " + str(epsilon))
