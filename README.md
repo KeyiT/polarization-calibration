@@ -9,7 +9,7 @@ git clone https://github.com/KeyiT/polarization-calibration.git
 ```
 2. Setup a new python virtual environment:
 ```bash
-conda create --name polarization python==3.6
+conda create --name polarization python=2.7
 source activate polarization
 ```
 3. Under the root folder
