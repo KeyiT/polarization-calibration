@@ -7,7 +7,7 @@ import numpy as np
 from scipy.optimize import least_squares, newton_krylov, broyden1, approx_fprime, check_grad, newton, fsolve
 
 
-class SlidingWindownCalibrator(object):
+class SlidingWindowCalibrator(object):
     def __init__(self, model, num_samples=6, num_resamples=1):
         self.model = model
         self.num_samples = num_samples
@@ -18,7 +18,7 @@ class SlidingWindownCalibrator(object):
 
     def initialize(self, seed=3):
 
-        log.info("sliding widown calibrator initializing...")
+        log.info("sliding window calibrator initializing...")
 
         log.info("sweeping..")
         sample_inputs = list()
@@ -126,57 +126,71 @@ class SlidingWindownCalibrator(object):
             return
 
         epsilon = np.sqrt(np.finfo(float).eps) if epsilon is None else epsilon
-
         log.debug("epsilon: " + str(epsilon))
-        # estimate f prime times epsilon
-        numerical_output_changes = None
-        for _ in range(num_observes):
-            if numerical_output_changes is None:
-                numerical_output_changes = self._approx_fprime_epsilon(
-                    self.sample_queue[-1].inputs, self.model.observe, [epsilon, epsilon]
+
+        directions = [
+            [1.0, 1.0], [1.0, -1.0], [-1.0, 1.0], [-1.0, -1.0]
+        ]
+        success = False
+
+        for direct in directions:
+
+            log.debug("direction: " + str(direct))
+            # estimate f prime times epsilon
+            numerical_output_changes = None
+            for _ in range(num_observes):
+                if numerical_output_changes is None:
+                    numerical_output_changes = self._approx_fprime_epsilon(
+                        self.sample_queue[-1].inputs, self.model.observe, [direct[0] * epsilon, direct[1] * epsilon]
+                    )
+                else:
+                    numerical_output_changes += self._approx_fprime_epsilon(
+                        self.sample_queue[-1].inputs, self.model.observe, [direct[0] * epsilon, direct[1] * epsilon]
+                    )
+            numerical_output_changes /= num_observes
+
+            def residual(new_params):
+                log.debug("tried parameters: " + str(new_params))
+                jac_inputs = np.squeeze(self.model.guess_jac_inputs(
+                    self.sample_queue[-1].inputs, new_params
+                ))
+
+                jac_residual = numerical_output_changes - jac_inputs * epsilon
+
+                return jac_residual
+
+            def residual_jac(new_params):
+
+                hes_params = self.model.guess_hes_inputs_params(
+                    self.sample_queue[-1].inputs, new_params
                 )
-            else:
-                numerical_output_changes += self._approx_fprime_epsilon(
-                    self.sample_queue[-1].inputs, self.model.observe, [epsilon, epsilon]
-                )
-        numerical_output_changes /= num_observes
 
-        def residual(new_params):
-            log.debug("tried parameters: " + str(new_params))
-            jac_inputs = np.squeeze(self.model.guess_jac_inputs(
-                self.sample_queue[-1].inputs, new_params
-            ))
+                return - hes_params * epsilon
 
-            jac_residual = numerical_output_changes - jac_inputs * epsilon
+            if verbose > 0:
+                print('tracking...')
+            results = fsolve(residual, np.asarray(self.model_params), fprime=residual_jac, xtol=3e-16)
 
-            return jac_residual
+            next_model_params = results.tolist()
+            log.debug(results)
 
-        def residual_jac(new_params):
+            if verbose > 0:
+                print('searching minimum...')
+            min_inputs = self.model.argmin(params=next_model_params, initial_inputs=self.sample_queue[-1].inputs,
+                                           verbose=verbose)
+            min_ = self.model.observe(min_inputs)
 
-            hes_params = self.model.guess_hes_inputs_params(
-                self.sample_queue[-1].inputs, new_params
-            )
+            log.info("minimum of proposed model: " + str(min_))
 
-            return - hes_params * epsilon
+            if min_ < new_output:
+                self.model_params = next_model_params
+                self.sample_queue.popleft()
+                self.sample_queue.append(SampleRecord(min_inputs, min_))
+                success = True
+                break
 
-        if verbose > 0:
-            print('tracking...')
-        results = fsolve(residual, np.asarray(self.model_params), fprime=residual_jac, xtol=3e-16)
-
-        next_model_params = results.tolist()
-        log.debug(results)
-
-        if verbose > 0:
-            print('searching minimum...')
-        min_inputs = self.model.argmin(params=next_model_params, initial_inputs=self.sample_queue[-1].inputs, verbose=verbose)
-        min_ = self.model.observe(min_inputs)
-
-        log.info("minimum of proposed model: " + str(min_))
-
-        if min_ < new_output:
-            self.model_params = next_model_params
-            self.sample_queue.popleft()
-            self.sample_queue.append(SampleRecord(min_inputs, min_))
+        if not success:
+            raise ValueError("Failed to find better minimum!")
 
     @staticmethod
     def _approx_fprime_epsilon(xk, f, epsilon, args=(), f0=None):
@@ -187,7 +201,10 @@ class SlidingWindownCalibrator(object):
         for k in range(len(xk)):
             ei[k] = 1.0
             d = epsilon * ei
-            grad[k] = f(*((xk + d,) + args)) - f0
+            if epsilon[k] >= 0:
+                grad[k] = f(*((xk + d,) + args)) - f0
+            else:
+                grad[k] = f0 - f(*((xk + d,) + args))
             ei[k] = 0.0
         return grad
 

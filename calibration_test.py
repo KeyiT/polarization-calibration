@@ -6,7 +6,7 @@ logging.basicConfig(filename='data/app.log', filemode='w', format='%(name)s - %(
 
 def initialize_test():
     model = simulators.SimulatorModel([0.7991353, 2.2477762])
-    calib = calibrators.SlidingWindownCalibrator(model, num_resamples=1, num_samples=12)
+    calib = calibrators.SlidingWindowCalibrator(model, num_resamples=1, num_samples=12)
     calib.initialize()
     print(calib.model_params)
     print(calib.sample_queue[-1].inputs)
