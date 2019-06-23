@@ -110,7 +110,7 @@ class SlidingWindowCalibrator(object):
         if results.success:
             return results.x
 
-    def track(self, epsilon=None, threshold=1E-6, num_observes=1, verbose=0):
+    def track(self, epsilon=None, threshold=1E-6, num_observes=1, verbose=0, tol=1E-6):
         if self.sample_queue is None or self.model_params is None:
             raise ValueError("calibrator not initialized!")
 
@@ -182,7 +182,7 @@ class SlidingWindowCalibrator(object):
 
             log.info("minimum of proposed model: " + str(min_))
 
-            if min_ < new_output:
+            if min_ < new_output + tol:
                 self.model_params = next_model_params
                 self.sample_queue.popleft()
                 self.sample_queue.append(SampleRecord(min_inputs, min_))
