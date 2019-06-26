@@ -71,11 +71,17 @@ class SimulatorModel(object):
         h1, h2 = self.params
         theta1, theta2 = inputs
 
+        h1 = min(h1, 0.999)
+        h1 = max(h1, 0.001)
+
         return self._model(h1, h2, theta1, theta2)
 
     def guess(self, inputs, params):
         h1, h2 = params
         theta1, theta2 = inputs
+
+        h1 = min(h1, 0.999)
+        h1 = max(h1, 0.001)
 
         return self._model(h1, h2, theta1, theta2)
 
@@ -83,7 +89,8 @@ class SimulatorModel(object):
         h1, h2 = params
         theta1, theta2 = inputs
 
-        h1 = min(h1, 0.99)
+        h1 = min(h1, 0.999)
+        h1 = max(h1, 0.001)
 
         jac_tmp = self._jac_inputs(h1, h2, theta1, theta2)
         return np.ndarray(shape=[2], buffer=np.array([jac_tmp[0][0], jac_tmp[0][1]]))
@@ -92,28 +99,36 @@ class SimulatorModel(object):
         h1, h2 = params
         theta1, theta2 = inputs
 
-        h1 = min(h1, 0.99)
+        h1 = min(h1, 0.999)
+        h1 = max(h1, 0.001)
+
         return self._jac_params(h1, h2, theta1, theta2)
 
     def guess_hes_inputs(self, inputs, params):
         h1, h2 = params
         theta1, theta2 = inputs
 
-        h1 = min(h1, 1.0)
+        h1 = min(h1, 0.999)
+        h1 = max(h1, 0.001)
+
         return self._hes_inputs(h1, h2, theta1, theta2)
 
     def guess_hes_params(self, inputs, params):
         h1, h2 = params
         theta1, theta2 = inputs
 
-        h1 = min(h1, 1.0)
+        h1 = min(h1, 0.999)
+        h1 = max(h1, 0.001)
+
         return self._hes_params(h1, h2, theta1, theta2)
 
     def guess_hes_inputs_params(self, inputs, params):
         h1, h2 = params
         theta1, theta2 = inputs
 
-        h1 = min(h1, 1.0)
+        h1 = min(h1, 0.999)
+        h1 = max(h1, 0.001)
+
         return self._hes_inputs_params(h1, h2, theta1, theta2)
 
     def argmin(self, params=None, initial_inputs=None, verbose=0):

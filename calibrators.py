@@ -16,7 +16,7 @@ class SlidingWindowCalibrator(object):
         self.model_params = None
         self.sample_queue = None
 
-    def initialize(self, seed=3):
+    def initialize(self, seed=3, num_observes=1):
 
         log.info("sliding window calibrator initializing...")
 
@@ -30,7 +30,8 @@ class SlidingWindowCalibrator(object):
             ])
 
         log.debug("sweeping model inputs: " + str(sample_inputs))
-        observes_ = [self.model.observe(input_) for input_ in sample_inputs]
+        observes_ = [[self.model.observe(input_) for _ in range(num_observes)] for input_ in sample_inputs]
+        observes_ = np.mean(np.asarray(observes_), axis=1).tolist()
         log.debug("sweeping model outputs: " + str(observes_))
 
         self.sample_queue = collections.deque([
