@@ -1,6 +1,6 @@
 sympy==1.1.1
 scipy==0.19.1
-numpy==1.13.3
+numpy==1.22.0
 jupyter
 sklearn
 matplotlib
